@@ -428,7 +428,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
     {
         // random selection
         double sel_prob = 1.0 / (double) (total_task_need_schedule - total_task_over_time);
-        for (int i=0; i<NumPItem; i++)
+        for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
             {
@@ -447,7 +447,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
         // select max pheromone
         double max_Pheromone = 0;
         int max_Pheromone_Task_Index;
-        for (int i=0; i<NumKItem; i++)
+        for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
             {
@@ -466,7 +466,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
     {
         // random selection
         double sel_prob = 1.0 / (double) (total_task_need_schedule - total_task_over_time);
-        for (int i=0; i<NumPItem; i++)
+        for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
             {
@@ -485,7 +485,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
         // select max pheromone
         double max_Pheromone = 0;
         int max_Pheromone_Task_Index;
-        for (int i=0; i<NumKItem; i++)
+        for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
             {
