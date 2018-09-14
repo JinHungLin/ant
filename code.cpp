@@ -8,7 +8,7 @@
 using namespace std;
 
 #define CT 10 // maximum time for a work station
-#define FMPP 0.5 // follow the max pheromone path probability
+#define FMPP 0.6 // follow the max pheromone path probability
 
 enum KItem
 {
@@ -69,6 +69,7 @@ struct Model
 {
 	int people;
 	int num_of_tasks;
+	double total_time;
 	struct Task **task_list;
 };
 
@@ -83,6 +84,8 @@ struct WorkStation
 struct Solution
 {
     int num_of_work_stations;
+    int total_people;
+    double weight_total_time;
 	struct WorkStation *first_work_station;
 	double objective_function;
 };
@@ -106,6 +109,9 @@ struct Task P_task [NumPItem];
 
 struct Solution* build_feasible_solution(void);
 int find_K_task(struct Task *currentTask, double work_station_time);
+int find_P_task(struct Task *currentTask, double work_station_time);
+struct Model model[10];
+
 double calulate_task_time(int type, int index);
 
 int main()
@@ -298,9 +304,6 @@ int main()
 
 struct Solution* build_feasible_solution(void)
 {
-    bool K_type_task_empty = 0;
-    bool P_type_task_empty = 0;
-
     for (int i=0; i<NumKItem; i++)
         K_task[i].task_time = calulate_task_time(K_TYPE, i);
 
@@ -309,24 +312,31 @@ struct Solution* build_feasible_solution(void)
 
 	// create a solution
 	struct Solution* sol = new struct Solution;
-
+    *sol = {
+        .num_of_work_stations = 0,
+        .total_people = 0,
+        .weight_total_time = 0,
+        .first_work_station = nullptr,
+        .objective_function = 0
+    };
 	// open work station
-    struct WorkStation* ws = new struct WorkStation;
-    *ws = {
+    struct WorkStation* currentWS = new struct WorkStation;
+    *currentWS = {
         .num_of_tasks = 0,
         .first_task = nullptr,
         .work_station_time = 0,
         .next_work_station = nullptr
     };
 
-    sol->first_work_station = ws;
+    sol->first_work_station = currentWS;
+    sol->num_of_work_stations++;
 
-    struct Task *tk = nullptr;
+    struct Task *currentTask = nullptr;
 
     // arrange K tasks
     while (true)
     {
-        int tk_index = find_K_task(tk, ws->work_station_time);
+        int tk_index = find_K_task(currentTask, currentWS->work_station_time);
         if (tk_index == TASK_LIST_EMPTY)
         {
             break;
@@ -334,14 +344,92 @@ struct Solution* build_feasible_solution(void)
         else if (tk_index == WORK_STATION_OVER_TIME)
         {
             // create new work station
-
+            struct WorkStation* nextWS = new struct WorkStation;
+            *nextWS = {
+                .num_of_tasks = 0,
+                .first_task = nullptr,
+                .work_station_time = 0,
+                .next_work_station = nullptr
+            };
+            currentWS->next_work_station = nextWS;
+            currentWS = nextWS;
+            sol->num_of_work_stations++;
             continue;
         }
         else
         {
             // arrange the K task found
+            currentWS->num_of_tasks++;
+            if (currentWS->first_task == nullptr)
+                currentWS->first_task = &K_task[tk_index];
+            currentWS->work_station_time += K_task[tk_index].task_time;
+            currentTask = &K_task[tk_index];
         }
 	}
+	while (true)
+    {
+        int tk_index = find_P_task(currentTask, currentWS->work_station_time);
+        if (tk_index == TASK_LIST_EMPTY)
+        {
+            break;
+        }
+        else if (tk_index == WORK_STATION_OVER_TIME)
+        {
+            // create new work station
+            struct WorkStation* nextWS = new struct WorkStation;
+            *nextWS = {
+                .num_of_tasks = 0,
+                .first_task = nullptr,
+                .work_station_time = 0,
+                .next_work_station = nullptr
+            };
+            currentWS->next_work_station = nextWS;
+            currentWS = nextWS;
+            sol->num_of_work_stations++;
+            continue;
+        }
+        else
+        {
+            // arrange the P task found
+            currentWS->num_of_tasks++;
+            if (currentWS->first_task == nullptr)
+                currentWS->first_task = &P_task[tk_index];
+            currentWS->work_station_time += P_task[tk_index].task_time;
+            currentTask = &P_task[tk_index];
+        }
+	}
+	while (true)
+    {
+        int tk_index = find_P_task(currentTask, currentWS->work_station_time);
+        if (currentWS->work_station_time + P_task[NumPItem-1].task_time <= CT)
+        {
+            currentTask->next_task = &P_task[NumPItem-1];
+            P_task[NumPItem-1].schedule_done = 1;
+        }
+        else
+        {
+            // create new work station
+            struct WorkStation* nextWS = new struct WorkStation;
+            *nextWS = {
+                .num_of_tasks = 0,
+                .first_task = nullptr,
+                .work_station_time = 0,
+                .next_work_station = nullptr
+            };
+            currentWS->next_work_station = nextWS;
+            currentWS = nextWS;
+            sol->num_of_work_stations++;
+        }
+    }
+
+    for (int i=0; i<10; i++)
+    {
+        sol->total_people = sol->total_people + model[i].people;
+        for (int j=0; j<model[0].num_of_tasks; j++)
+            model[i].total_time = model[i].total_time + (model[i].task_list[j])->task_time;
+        sol->weight_total_time = sol->weight_total_time + (model[i].people * model[i].total_time) / sol->total_people;
+    }
+    sol->objective_function = sol->weight_total_time / (sol->num_of_work_stations * CT);
 }
 
 int find_K_task(struct Task *currentTask, double work_station_time)
@@ -409,7 +497,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
 	int total_task_need_schedule = 0;
 	int total_task_over_time = 0;
 
-    for (int i=0; i<NumPItem; i++)
+    for (int i=0; i<NumPItem-1; i++)
 	{
         if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1)
             total_task_need_schedule++;
@@ -424,7 +512,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
 		return WORK_STATION_OVER_TIME;
 
 	double p = rand() / (double) RAND_MAX;
-    if (currentTask == &K_task[NumKItem] && p > FMPP)
+    if (currentTask->type == K_TYPE && p > FMPP)
     {
         // random selection
         double sel_prob = 1.0 / (double) (total_task_need_schedule - total_task_over_time);
@@ -442,7 +530,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
             }
         }
     }
-    else if (currentTask == &K_task[NumKItem] && p <= FMPP)
+    else if (currentTask->type == K_TYPE && p <= FMPP)
     {
         // select max pheromone
         double max_Pheromone = 0;
@@ -462,7 +550,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
         P_task[max_Pheromone_Task_Index].schedule_done = 1;
         return max_Pheromone_Task_Index;
     }
-    else if (currentTask == &P_task[NumPItem] && p > FMPP)
+    else if (currentTask->type == P_TYPE && p > FMPP)
     {
         // random selection
         double sel_prob = 1.0 / (double) (total_task_need_schedule - total_task_over_time);
@@ -480,7 +568,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
             }
         }
     }
-    else if (currentTask == &P_task[NumPItem] && p <= FMPP)
+    else if (currentTask->type == P_TYPE && p <= FMPP)
     {
         // select max pheromone
         double max_Pheromone = 0;
