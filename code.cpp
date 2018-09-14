@@ -419,6 +419,7 @@ struct Solution* build_feasible_solution(void)
             currentWS->next_work_station = nextWS;
             currentWS = nextWS;
             sol->num_of_work_stations++;
+            continue;
         }
     }
 
