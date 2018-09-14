@@ -401,7 +401,11 @@ struct Solution* build_feasible_solution(void)
 	while (true)
     {
         int tk_index = find_P_task(currentTask, currentWS->work_station_time);
-        if (currentWS->work_station_time + P_task[NumPItem-1].task_time <= CT)
+        if (tk_index == TASK_LIST_EMPTY)
+        {
+            break;
+        }
+        else if (currentWS->work_station_time + P_task[NumPItem-1].task_time <= CT)
         {
             currentTask->next_task = &P_task[NumPItem-1];
             P_task[NumPItem-1].schedule_done = 1;
