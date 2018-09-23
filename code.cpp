@@ -104,6 +104,7 @@ double Pheromone_KK [NumKItem][NumKItem];
 double Pheromone_KP [NumKItem][NumPItem];
 double Pheromone_PP [NumPItem][NumPItem];
 
+
 struct Task K_task [NumKItem];
 struct Task P_task [NumPItem];
 
@@ -298,9 +299,64 @@ int main()
             for (int j=0; j<model[i].num_of_tasks; j++)
                 model[i].task_list[j]->need_schedule = 1;
     }
+    int t = 0;
+    for (int i=0; i<NumKItem; i++)
+    {
+        if (K_task[i].need_schedule == 1 && K_task[i].schedule_done != 1)
+            t++;
+    }
+    for (int i=0; i<NumPItem; i++)
+    {
+        if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1)
+        t++;
+    }
+
+    struct Solution* sol[N];
+    struct Solution* best_solution;
+    double best_objective_function = 0;
+
+    for (int i=0; i<SC; i++)
+    {
+        for (int j=0; j<N; j++)
+        {
+            sol[j] = build_feasible_solution();
+            if (sol[j]->objective_function > best_objective_function)
+            {
+                best_objective_function = sol[j]->objective_function;
+                best_solution = sol[j];
+            }
+            temp[1] = sol[j]->first_work_station->first_task;
+            for (int z=2; z<t; z++)
+            {
+                temp[z] = temp[z-1]->next_task;
+                if (temp[z-1]->type == K_TYPE && temp[z]->type == K_TYPE)
+                    Pheromone_KK[temp[z-1]->index][temp[z]->index] = Pheromone_KK[temp[z-1]->index][temp[z]->index] + 10 * sol[j]->objective_function;
+                if (temp[z-1]->type == K_TYPE && temp[z]->type == P_TYPE)
+                    Pheromone_KP[temp[z-1]->index][temp[z]->index] = Pheromone_KP[temp[z-1]->index][temp[z]->index] + 10 * sol[j]->objective_function;
+                if (temp[z-1]->type == P_TYPE && temp[z]->type == P_TYPE)
+                    Pheromone_PP[temp[z-1]->index][temp[z]->index] = Pheromone_PP[temp[z-1]->index][temp[z]->index] + 10 * sol[j]->objective_function;
+            }
+        }
+        for (int x=0; x<NumKItem; x++)
+        {
+            for (int y=0; y<NumKItem; y++)
+                Pheromone_KK[x][y] = (1-a) * Pheromone_KK[x][y];
+        }
+        for (int x=0; x<NumKItem; x++)
+        {
+            for (int y=0; y<NumPItem; y++)
+                Pheromone_KP[x][y] = (1-a) * Pheromone_KP[x][y];
+        }
+        for (int x=0; x<NumPItem; x++)
+        {
+            for (int y=0; y<NumPItem; y++)
+                Pheromone_PP[x][y] = (1-a) * Pheromone_PP[x][y];
+        }
+    }
 
 	return 0;
 }
+
 
 struct Solution* build_feasible_solution(void)
 {
@@ -366,6 +422,7 @@ struct Solution* build_feasible_solution(void)
             currentTask = &K_task[tk_index];
         }
 	}
+	// arrange P tasks (excluding final task)
 	while (true)
     {
         int tk_index = find_P_task(currentTask, currentWS->work_station_time);
@@ -398,17 +455,14 @@ struct Solution* build_feasible_solution(void)
             currentTask = &P_task[tk_index];
         }
 	}
+	// arrange final P tasks
 	while (true)
     {
-        int tk_index = find_P_task(currentTask, currentWS->work_station_time);
-        if (tk_index == TASK_LIST_EMPTY)
-        {
-            break;
-        }
-        else if (currentWS->work_station_time + P_task[NumPItem-1].task_time <= CT)
+        if (currentWS->work_station_time + P_task[NumPItem-1].task_time <= CT)
         {
             currentTask->next_task = &P_task[NumPItem-1];
             P_task[NumPItem-1].schedule_done = 1;
+            break;
         }
         else
         {
@@ -423,14 +477,25 @@ struct Solution* build_feasible_solution(void)
             currentWS->next_work_station = nextWS;
             currentWS = nextWS;
             sol->num_of_work_stations++;
-            continue;
+
+            currentWS->num_of_tasks++;
+            currentWS->first_task = &P_task[NumPItem-1];
+            currentWS->work_station_time += P_task[NumPItem-1].task_time;
+
+            currentTask->next_task = &P_task[NumPItem-1];
+            currentTask = &P_task[NumPItem-1];
+
+            P_task[NumPItem-1].schedule_done = 1;
         }
     }
 
     for (int i=0; i<10; i++)
     {
         sol->total_people = sol->total_people + model[i].people;
-        for (int j=0; j<model[0].num_of_tasks; j++)
+    }
+    for (int i=0; i<10; i++)
+    {
+        for (int j=0; j<model[i].num_of_tasks; j++)
             model[i].total_time = model[i].total_time + (model[i].task_list[j])->task_time;
         sol->weight_total_time = sol->weight_total_time + (model[i].people * model[i].total_time) / sol->total_people;
     }
@@ -479,7 +544,7 @@ int find_K_task(struct Task *currentTask, double work_station_time)
     {
         // select max pheromone
         double max_Pheromone = 0;
-        int max_Pheromone_Task_Index;
+        int max_Pheromone_Task_Index = 0;
         for (int i=0; i<NumKItem; i++)
         {
             if (K_task[i].need_schedule == 1 && K_task[i].schedule_done != 1 && work_station_time + K_task[i].task_time <= CT)
@@ -539,7 +604,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
     {
         // select max pheromone
         double max_Pheromone = 0;
-        int max_Pheromone_Task_Index;
+        int max_Pheromone_Task_Index = 0;
         for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
@@ -577,7 +642,7 @@ int find_P_task(struct Task *currentTask, double work_station_time)
     {
         // select max pheromone
         double max_Pheromone = 0;
-        int max_Pheromone_Task_Index;
+        int max_Pheromone_Task_Index = 0;
         for (int i=0; i<NumPItem-1; i++)
         {
             if (P_task[i].need_schedule == 1 && P_task[i].schedule_done != 1 && work_station_time + P_task[i].task_time <= CT)
